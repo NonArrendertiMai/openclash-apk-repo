@@ -16,10 +16,18 @@ jobs:
 
       - name: Install apk-tools
         run: |
-          git clone https://gitlab.alpinelinux.org/alpine/apk-tools.git
+          git clone --depth=1 https://github.com/openwrt/apk-tools.git
           cd apk-tools
+
+          sudo apt-get update
+          sudo apt-get install -y \
+                build-essential \
+                pkg-config \
+                libssl-dev \
+                zlib1g-dev
+          
           make -j$(nproc)
-          sudo cp src/apk /usr/local/bin/apk
+          sudo install -m 755 src/apk /usr/local/bin/apk
           apk --version
 
       - name: Import signing key
