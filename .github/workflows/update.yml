@@ -45,6 +45,14 @@ jobs:
 
           ls -lh repo/
 
+      - name: Test OpenWrt APK tool
+        run: |
+          docker run --rm openwrt/sdk:armsr-armv8 /bin/sh -c '
+            echo "=== APK ==="
+            which apk || true
+            apk --version || true
+          '
+          
       - name: Commit APK
         run: |
           git config user.name "github-actions[bot]"
