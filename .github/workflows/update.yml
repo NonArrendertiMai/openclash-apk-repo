@@ -45,27 +45,31 @@ jobs:
 
           ls -lh repo/
 
-      - name: Inspect OpenWrt SDK
+      - name: Build OpenWrt host apk
         run: |
-          docker run --rm \
-            openwrt/sdk:armsr-armv8 \
-            /bin/sh -c '
-              echo "=== ROOT ==="
-              ls -la /
+          set -eux
 
-              echo "=== BUILDBOT ==="
-              ls -la /home/buildbot 2>/dev/null || true
+          git clone --depth=1 \
+            https://github.com/openwrt/openwrt.git \
+            openwrt
 
-              echo "=== FIND SDK ==="
-              find / -maxdepth 3 -type d \( -name staging_dir -o -name package -o -name include \) 2>/dev/null | head -50
+          cd openwrt
 
-              echo "=== FIND APK ==="
-              find / -type f \( -name apk -o -name "apk*" \) 2>/dev/null | head -50
+          echo "=== OpenWrt revision ==="
+          git log -1 --oneline
 
-              echo "=== MAKE ==="
-              which make || true
-              make --version 2>/dev/null | head -2 || true
-            '
+          echo "=== apk package Makefile ==="
+          sed -n '1,220p' package/system/apk/Makefile
+
+          echo "=== host dependencies ==="
+          which meson
+          which ninja
+          which openssl
+          which pkg-config
+
+          echo "=== apk source ==="
+          grep -E 'PKG_VERSION|PKG_SOURCE|PKG_SOURCE_VERSION' \
+            package/system/apk/Makefile
           
       - name: Commit APK
         run: |
