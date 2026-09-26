@@ -45,34 +45,46 @@ jobs:
 
           ls -lh repo/
 
-      - name: Build apk-tools directly
+      - name: Build apk-tools
         run: |
           set -eux
 
+          echo "=== Install build dependencies ==="
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
+            libssl-dev \
+            liblua5.1-0-dev \
+            zlib1g-dev \
+            wget
+
+          echo "=== Verify build tools ==="
+          meson --version
+          ninja --version
+          openssl version
+
           APK_COMMIT="b5a31c0d865342ad80be10d68f1bb3d3ad9b0866"
 
-          echo "=== Download apk-tools source ==="
-
+          echo "=== Download apk-tools ==="
           curl -fL --retry 3 \
             "https://github.com/alpinelinux/apk-tools/archive/${APK_COMMIT}.tar.gz" \
             -o apk-tools.tar.gz
 
+          rm -rf apk-tools
           mkdir apk-tools
+
           tar -xzf apk-tools.tar.gz \
             --strip-components=1 \
             -C apk-tools
 
           cd apk-tools
 
-          echo "=== Source ==="
-          git_hash="$(git rev-parse --verify HEAD 2>/dev/null || true)"
-          echo "Expected commit: ${APK_COMMIT}"
-          ls -la
+          echo "=== apk-tools VERSION ==="
+          cat VERSION
 
-          echo "=== Meson ==="
-          meson --version
-
-          echo "=== Configure ==="
+          echo "=== Meson configure ==="
           meson setup build \
             -Ddocs=disabled \
             -Dhelp=enabled \
@@ -82,9 +94,7 @@ jobs:
             -Dzstd=disabled \
             -Dpython=disabled \
             -Dtests=disabled \
-            -Dcrypto_backend=openssl \
-            -Dminimal=true \
-            -Dversion=3.0.5
+            -Dcrypto_backend=openssl
 
           echo "=== Build ==="
           meson compile -C build
@@ -92,7 +102,7 @@ jobs:
           echo "=== Locate apk ==="
           find build -type f -name apk -ls
 
-          echo "=== Test ==="
+          echo "=== Test apk ==="
           find build -type f -name apk -exec {} --version \;
           
       - name: Commit APK
