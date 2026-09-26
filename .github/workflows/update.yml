@@ -45,13 +45,17 @@ jobs:
 
           ls -lh repo/
 
-      - name: Test OpenWrt APK tool
+      - name: Test OpenWrt SDK
         run: |
-          docker run --rm openwrt/sdk:armsr-armv8 /bin/sh -c '
-            echo "=== APK ==="
-            which apk || true
-            apk --version || true
-          '
+          docker run --rm \
+            -v "$PWD:/work" \
+            openwrt/sdk:armsr-armv8 \
+            /bin/sh -c '
+              echo "=== SDK ==="
+              ls -la /builder
+              echo "=== apk candidates ==="
+              find / -type f -name apk 2>/dev/null | head -20
+            '
           
       - name: Commit APK
         run: |
