@@ -1,56 +1,74 @@
-name: build-openclash-repo
+name: Build OpenClash APK Repository
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install apk-tools
+      - name: Download OpenWrt SDK
         run: |
-          git clone --depth=1 https://github.com/openwrt/apk-tools.git
-          cd apk-tools
+          wget -q \
+            https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst \
+            -O sdk.tar.zst
 
-          sudo apt-get update
-          sudo apt-get install -y \
-                build-essential \
-                pkg-config \
-                libssl-dev \
-                zlib1g-dev
-          
-          make -j$(nproc)
-          sudo install -m 755 src/apk /usr/local/bin/apk
-          apk --version
+          tar --use-compress-program=unzstd -xf sdk.tar.zst
+
+          SDK=$(find . -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -1)
+
+          echo "SDK=$SDK" >> "$GITHUB_ENV"
+
+      - name: Build apk-tools host utility
+        run: |
+          cd "$SDK"
+
+          ./scripts/feeds update base
+          make defconfig
+
+          make package/system/apk/host/compile V=s
+
+          ./staging_dir/host/bin/apk --version
 
       - name: Import signing key
         run: |
-          echo "${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}" > private.sec
+          printf '%s\n' '${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}' > private.sec
           chmod 600 private.sec
 
       - name: Generate APK repository index
         run: |
-          apk mkndx \
-            --sign private.sec \
-            --output repo/packages.adb \
-            repo/*.apk
+          mkdir -p repo
 
-      - name: Cleanup
+          cd repo
+
+          "$GITHUB_WORKSPACE/$SDK/staging_dir/host/bin/apk" mkndx \
+            --root "$GITHUB_WORKSPACE/$SDK" \
+            --keys-dir "$GITHUB_WORKSPACE/$SDK" \
+            --sign "$GITHUB_WORKSPACE/private.sec" \
+            --output packages.adb \
+            *.apk
+
+      - name: Cleanup private key
         run: |
           rm -f private.sec
 
-      - name: Commit repo
+      - name: Commit repository index
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add repo/packages.adb
-          git commit -m "update apk repository" || exit 0
-          git push
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update OpenClash APK repository"
+            git push
+          fi
