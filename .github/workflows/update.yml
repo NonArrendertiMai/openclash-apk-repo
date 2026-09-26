@@ -16,8 +16,11 @@ jobs:
 
       - name: Install apk-tools
         run: |
-          sudo apt update
-          sudo apt install -y apk-tools
+          wget https://downloads.openwrt.org/snapshots/packages/x86_64/base/apk-tools-static_3.0.5-r1_x86_64.apk
+          mkdir apk-tools
+          tar -xf apk-tools-static*.apk -C apk-tools
+          sudo cp apk-tools/usr/bin/apk /usr/local/bin/
+          apk --version
 
       - name: Import signing key
         run: |
@@ -26,8 +29,6 @@ jobs:
 
       - name: Generate APK repository index
         run: |
-          mkdir -p repo
-
           apk mkndx \
             --sign private.sec \
             --output repo/packages.adb \
