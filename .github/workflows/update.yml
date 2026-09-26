@@ -23,7 +23,8 @@ jobs:
           echo "Runner: $RUNNER_OS"
           uname -a
 
-      - name: Download latest OpenClash APK
+      - name: Check OpenClash update
+        id: check_update
         run: |
           mkdir -p repo
 
@@ -33,6 +34,18 @@ jobs:
             | jq -r '.tag_name')
 
           echo "Latest OpenClash version: $VERSION"
+
+          LATEST_FILE="repo/luci-app-openclash-${VERSION#v}.apk"
+
+          if [ -f "$LATEST_FILE" ]; then
+            echo "OpenClash $VERSION is already in the repository."
+            echo "No update needed."
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "New OpenClash version detected: $VERSION"
+          echo "update_needed=true" >> "$GITHUB_OUTPUT"
 
           URL=$(curl -fsSL "$API" \
             | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' \
@@ -44,11 +57,12 @@ jobs:
           test "$URL" != "null"
 
           curl -fL --retry 3 "$URL" \
-            -o "repo/luci-app-openclash-${VERSION#v}.apk"
+            -o "$LATEST_FILE"
 
           ls -lh repo/
 
       - name: Build apk-tools
+        if: steps.check_update.outputs.update_needed == 'true'
         run: |
           sudo apt-get update
 
@@ -94,6 +108,7 @@ jobs:
           cd ..
 
       - name: Sign OpenClash APK
+        if: steps.check_update.outputs.update_needed == 'true'
         env:
           OPENCLASH_APK_PRIVATE_KEY: ${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}
         run: |
@@ -108,6 +123,7 @@ jobs:
             repo/*.apk
 
       - name: Generate APK repository index
+        if: steps.check_update.outputs.update_needed == 'true'
         env:
           OPENCLASH_APK_PRIVATE_KEY: ${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}
         run: |
@@ -126,6 +142,7 @@ jobs:
           rm -f openclash-apk.sec
 
       - name: Commit APK
+        if: steps.check_update.outputs.update_needed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
