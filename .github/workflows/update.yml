@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,16 +16,37 @@ jobs:
 
       - name: Show environment
         run: |
-          set -eux
-
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Runner: $RUNNER_OS"
           uname -a
 
-      - name: Install build dependencies
+      - name: Download latest OpenClash APK
         run: |
-          set -eux
+          mkdir -p repo
 
+          API="https://api.github.com/repos/vernesong/OpenClash/releases/latest"
+
+          VERSION=$(curl -fsSL "$API" \
+            | jq -r '.tag_name')
+
+          echo "Latest OpenClash version: $VERSION"
+
+          URL=$(curl -fsSL "$API" \
+            | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' \
+            | head -n 1)
+
+          echo "APK URL: $URL"
+
+          test -n "$URL"
+          test "$URL" != "null"
+
+          curl -fL --retry 3 "$URL" \
+            -o "repo/luci-app-openclash-${VERSION#v}.apk"
+
+          ls -lh repo/
+
+      - name: Build apk-tools
+        run: |
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -35,25 +56,16 @@ jobs:
             libssl-dev \
             liblua5.1-0-dev \
             lua5.1 \
-            zlib1g-dev \
-            wget
-
-      - name: Build apk-tools
-        run: |
-          set -eux
+            zlib1g-dev
 
           APK_COMMIT="b5a31c0d865342ad80be10d68f1bb3d3ad9b0866"
-
-          echo "Downloading apk-tools commit:"
-          echo "$APK_COMMIT"
 
           curl -fL --retry 3 \
             "https://github.com/alpinelinux/apk-tools/archive/${APK_COMMIT}.tar.gz" \
             -o apk-tools.tar.gz
 
           rm -rf apk-tools
-
-          mkdir -p apk-tools
+          mkdir apk-tools
 
           tar -xzf apk-tools.tar.gz \
             --strip-components=1 \
@@ -74,85 +86,18 @@ jobs:
 
           meson compile -C build
 
-          echo "=== apk version ==="
           ./build/src/apk --version
-
-          echo "=== apk mkndx help ==="
-          ./build/src/apk mkndx --help
 
           cd ..
 
-      - name: Download latest OpenClash APK
-        run: |
-          set -eux
-
-          mkdir -p repo
-
-          API="https://api.github.com/repos/vernesong/OpenClash/releases/latest"
-
-          VERSION=$(curl -fsSL "$API" \
-            | jq -r '.tag_name')
-
-          URL=$(curl -fsSL "$API" \
-            | jq -r '.assets[] |
-              select(.name | endswith(".apk")) |
-              .browser_download_url' \
-            | head -n 1)
-
-          echo "Latest OpenClash version: $VERSION"
-          echo "APK URL: $URL"
-
-          test -n "$VERSION"
-          test "$VERSION" != "null"
-
-          test -n "$URL"
-          test "$URL" != "null"
-
-          rm -f repo/*.apk
-
-          curl -fL --retry 3 "$URL" \
-            -o "repo/luci-app-openclash-${VERSION#v}.apk"
-
-          echo "=== Downloaded APK ==="
-          ls -lh repo/
-
-      - name: Check signing key
+      - name: Generate APK repository index
         env:
           OPENCLASH_APK_PRIVATE_KEY: ${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}
         run: |
-          set -eux
-
           test -n "$OPENCLASH_APK_PRIVATE_KEY"
 
-          echo "Signing key secret is available."
-
-          echo "$OPENCLASH_APK_PRIVATE_KEY" \
-            > openclash-apk.sec
-
+          echo "$OPENCLASH_APK_PRIVATE_KEY" > openclash-apk.sec
           chmod 600 openclash-apk.sec
-
-          echo "=== Private key information ==="
-
-          openssl ec \
-            -in openclash-apk.sec \
-            -text \
-            -noout
-
-      - name: Generate APK repository index
-        run: |
-          set -eux
-
-          test -f openclash-apk.sec
-          test -f keys/openclash-apk.pub
-
-          echo "=== Repository public key ==="
-          openssl ec \
-            -pubin \
-            -in keys/openclash-apk.pub \
-            -text \
-            -noout
-
-          echo "=== Generating packages.adb ==="
 
           ./apk-tools/build/src/apk mkndx \
             --root . \
@@ -161,35 +106,20 @@ jobs:
             --output repo/packages.adb \
             repo/*.apk
 
-          echo "=== Repository files ==="
           ls -lh repo/
 
-          echo "=== APK index ==="
-
-          ./apk-tools/build/src/apk adbdump \
-            --format json \
-            repo/packages.adb
-
-      - name: Remove private key
-        if: always()
-        run: |
-          set -eux
-
           rm -f openclash-apk.sec
-          rm -f apk-tools.tar.gz
 
-      - name: Commit repository
+      - name: Commit APK
         run: |
-          set -eux
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add repo/ keys/
+          git add repo/
 
           if git diff --cached --quiet; then
             echo "No changes."
           else
-            git commit -m "Update OpenClash APK repository"
+            git commit -m "Update OpenClash APK"
             git push
           fi
