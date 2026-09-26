@@ -1,60 +1,47 @@
-name: Build OpenClash APK Repository
+name: build-openclash-repo
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show environment
+      - name: Install apk-tools
         run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Runner: $RUNNER_OS"
-          uname -a
+          sudo apt update
+          sudo apt install -y apk-tools
 
-      - name: Download latest OpenClash APK
+      - name: Import signing key
+        run: |
+          echo "${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}" > private.sec
+          chmod 600 private.sec
+
+      - name: Generate APK repository index
         run: |
           mkdir -p repo
 
-          API="https://api.github.com/repos/vernesong/OpenClash/releases/latest"
+          apk mkndx \
+            --sign private.sec \
+            --output repo/packages.adb \
+            repo/*.apk
 
-          VERSION=$(curl -fsSL "$API" \
-            | jq -r '.tag_name')
-
-          echo "Latest OpenClash version: $VERSION"
-
-          URL=$(curl -fsSL "$API" \
-            | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' \
-            | head -n 1)
-
-          echo "APK URL: $URL"
-
-          test -n "$URL"
-          test "$URL" != "null"
-
-          curl -fL --retry 3 "$URL" \
-            -o "repo/luci-app-openclash-${VERSION#v}.apk"
-
-          ls -lh repo/
-
-      - name: Commit APK
+      - name: Cleanup
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f private.sec
 
-          git add repo/
+      - name: Commit repo
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
 
-          if git diff --cached --quiet; then
-            echo "No changes."
-          else
-            git commit -m "Update OpenClash APK"
-            git push
-          fi
+          git add repo/packages.adb
+          git commit -m "update apk repository" || exit 0
+          git push
