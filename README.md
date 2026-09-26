@@ -4,16 +4,16 @@
 自动获取 [OpenClash](https://github.com/vernesong/OpenClash) 最新 Release 的 APK，重新签名并生成 APK v3 仓库索引 `packages.adb`。
 
 我的使用环境
+
+```sh
 DISTRIB_TARGET=armsr/armv8
 DISTRIB_ARCH=aarch64_generic
 apk-tools=3.0.5
+```
 
-
-## OpenWrt 使用
+## 使用方法
 
 ### 1. 安装公钥
-
-在 OpenWrt 执行：
 
 ```sh
 wget -O /etc/apk/keys/openclash-apk.pub \
