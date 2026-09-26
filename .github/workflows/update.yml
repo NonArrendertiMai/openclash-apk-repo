@@ -49,7 +49,6 @@ jobs:
         run: |
           set -eux
 
-          echo "=== Install build dependencies ==="
           sudo apt-get update
           sudo apt-get install -y \
             meson \
@@ -57,6 +56,7 @@ jobs:
             pkg-config \
             libssl-dev \
             liblua5.1-0-dev \
+            lua5.1 \
             zlib1g-dev \
             wget
 
@@ -65,9 +65,12 @@ jobs:
           ninja --version
           openssl version
 
+          echo "=== Lua ==="
+          which lua5.1
+          lua5.1 -v
+
           APK_COMMIT="b5a31c0d865342ad80be10d68f1bb3d3ad9b0866"
 
-          echo "=== Download apk-tools ==="
           curl -fL --retry 3 \
             "https://github.com/alpinelinux/apk-tools/archive/${APK_COMMIT}.tar.gz" \
             -o apk-tools.tar.gz
@@ -84,7 +87,6 @@ jobs:
           echo "=== apk-tools VERSION ==="
           cat VERSION
 
-          echo "=== Meson configure ==="
           meson setup build \
             -Ddocs=disabled \
             -Dhelp=enabled \
@@ -96,7 +98,6 @@ jobs:
             -Dtests=disabled \
             -Dcrypto_backend=openssl
 
-          echo "=== Build ==="
           meson compile -C build
 
           echo "=== Locate apk ==="
