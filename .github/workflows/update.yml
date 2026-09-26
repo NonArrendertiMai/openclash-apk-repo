@@ -45,16 +45,26 @@ jobs:
 
           ls -lh repo/
 
-      - name: Test OpenWrt SDK
+      - name: Inspect OpenWrt SDK
         run: |
           docker run --rm \
-            -v "$PWD:/work" \
             openwrt/sdk:armsr-armv8 \
             /bin/sh -c '
-              echo "=== SDK ==="
-              ls -la /builder
-              echo "=== apk candidates ==="
-              find / -type f -name apk 2>/dev/null | head -20
+              echo "=== ROOT ==="
+              ls -la /
+
+              echo "=== BUILDBOT ==="
+              ls -la /home/buildbot 2>/dev/null || true
+
+              echo "=== FIND SDK ==="
+              find / -maxdepth 3 -type d \( -name staging_dir -o -name package -o -name include \) 2>/dev/null | head -50
+
+              echo "=== FIND APK ==="
+              find / -type f \( -name apk -o -name "apk*" \) 2>/dev/null | head -50
+
+              echo "=== MAKE ==="
+              which make || true
+              make --version 2>/dev/null | head -2 || true
             '
           
       - name: Commit APK
