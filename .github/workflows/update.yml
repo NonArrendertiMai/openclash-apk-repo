@@ -49,6 +49,24 @@ jobs:
         run: |
           set -eux
 
+          echo "=== Install build dependencies ==="
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
+            libssl-dev \
+            liblua5.1-0-dev \
+            zlib1g-dev \
+            wget
+
+          echo "=== Verify dependencies ==="
+          meson --version
+          ninja --version
+          openssl version
+          pkg-config --version
+
+          echo "=== Clone OpenWrt ==="
           git clone --depth=1 \
             https://github.com/openwrt/openwrt.git \
             openwrt
@@ -58,18 +76,17 @@ jobs:
           echo "=== OpenWrt revision ==="
           git log -1 --oneline
 
-          echo "=== apk package Makefile ==="
-          sed -n '1,220p' package/system/apk/Makefile
+          echo "=== Prepare OpenWrt ==="
+          make defconfig
 
-          echo "=== host dependencies ==="
-          which meson
-          which ninja
-          which openssl
-          which pkg-config
+          echo "=== Build host apk ==="
+          make package/system/apk/host/compile -j2 V=s
 
-          echo "=== apk source ==="
-          grep -E 'PKG_VERSION|PKG_SOURCE|PKG_SOURCE_VERSION' \
-            package/system/apk/Makefile
+          echo "=== Locate apk ==="
+          find staging_dir -type f -name apk -ls
+
+          echo "=== Test apk ==="
+          staging_dir/host/bin/apk --version
           
       - name: Commit APK
         run: |
