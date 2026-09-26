@@ -1,0 +1,60 @@
+name: Build OpenClash APK Repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Runner: $RUNNER_OS"
+          uname -a
+
+      - name: Download latest OpenClash APK
+        run: |
+          mkdir -p repo
+
+          API="https://api.github.com/repos/vernesong/OpenClash/releases/latest"
+
+          VERSION=$(curl -fsSL "$API" \
+            | jq -r '.tag_name')
+
+          echo "Latest OpenClash version: $VERSION"
+
+          URL=$(curl -fsSL "$API" \
+            | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' \
+            | head -n 1)
+
+          echo "APK URL: $URL"
+
+          test -n "$URL"
+          test "$URL" != "null"
+
+          curl -fL --retry 3 "$URL" \
+            -o "repo/luci-app-openclash-${VERSION#v}.apk"
+
+          ls -lh repo/
+
+      - name: Commit APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add repo/
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Update OpenClash APK"
+            git push
+          fi
