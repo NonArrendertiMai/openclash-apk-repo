@@ -90,7 +90,7 @@ jobs:
 
           cd ..
 
-      - name: Generate APK repository index
+      - name: Sign OpenClash APK
         env:
           OPENCLASH_APK_PRIVATE_KEY: ${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}
         run: |
@@ -99,10 +99,22 @@ jobs:
           echo "$OPENCLASH_APK_PRIVATE_KEY" > openclash-apk.sec
           chmod 600 openclash-apk.sec
 
+          ./apk-tools/build/src/apk adbsign \
+            --allow-untrusted \
+            --sign-key openclash-apk.sec \
+            repo/*.apk
+
+      - name: Generate APK repository index
+        env:
+          OPENCLASH_APK_PRIVATE_KEY: ${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}
+        run: |
+          test -n "$OPENCLASH_APK_PRIVATE_KEY"
+
           ./apk-tools/build/src/apk mkndx \
             --root . \
             --keys-dir keys \
-            --sign openclash-apk.sec \
+            --allow-untrusted \
+            --sign-key openclash-apk.sec \
             --output repo/packages.adb \
             repo/*.apk
 
