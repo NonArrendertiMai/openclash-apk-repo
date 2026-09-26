@@ -7,68 +7,54 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download OpenWrt SDK
+      - name: Show environment
         run: |
-          wget -q \
-            https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst \
-            -O sdk.tar.zst
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Runner: $RUNNER_OS"
+          uname -a
 
-          tar --use-compress-program=unzstd -xf sdk.tar.zst
-
-          SDK=$(find . -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -1)
-
-          echo "SDK=$SDK" >> "$GITHUB_ENV"
-
-      - name: Build apk-tools host utility
-        run: |
-          cd "$SDK"
-
-          ./scripts/feeds update base
-          make defconfig
-
-          make package/system/apk/host/compile V=s
-
-          ./staging_dir/host/bin/apk --version
-
-      - name: Import signing key
-        run: |
-          printf '%s\n' '${{ secrets.OPENCLASH_APK_PRIVATE_KEY }}' > private.sec
-          chmod 600 private.sec
-
-      - name: Generate APK repository index
+      - name: Download latest OpenClash APK
         run: |
           mkdir -p repo
 
-          cd repo
+          API="https://api.github.com/repos/vernesong/OpenClash/releases/latest"
 
-          "$GITHUB_WORKSPACE/$SDK/staging_dir/host/bin/apk" mkndx \
-            --root "$GITHUB_WORKSPACE/$SDK" \
-            --keys-dir "$GITHUB_WORKSPACE/$SDK" \
-            --sign "$GITHUB_WORKSPACE/private.sec" \
-            --output packages.adb \
-            *.apk
+          VERSION=$(curl -fsSL "$API" \
+            | jq -r '.tag_name')
 
-      - name: Cleanup private key
-        run: |
-          rm -f private.sec
+          echo "Latest OpenClash version: $VERSION"
 
-      - name: Commit repository index
+          URL=$(curl -fsSL "$API" \
+            | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url' \
+            | head -n 1)
+
+          echo "APK URL: $URL"
+
+          test -n "$URL"
+          test "$URL" != "null"
+
+          curl -fL --retry 3 "$URL" \
+            -o "repo/luci-app-openclash-${VERSION#v}.apk"
+
+          ls -lh repo/
+
+      - name: Commit APK
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add repo/packages.adb
+          git add repo/
 
           if git diff --cached --quiet; then
             echo "No changes."
           else
-            git commit -m "Update OpenClash APK repository"
+            git commit -m "Update OpenClash APK"
             git push
           fi
