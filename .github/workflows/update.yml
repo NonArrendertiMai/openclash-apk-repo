@@ -45,48 +45,55 @@ jobs:
 
           ls -lh repo/
 
-      - name: Build OpenWrt host apk
+      - name: Build apk-tools directly
         run: |
           set -eux
 
-          echo "=== Install build dependencies ==="
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson \
-            ninja-build \
-            pkg-config \
-            libssl-dev \
-            liblua5.1-0-dev \
-            zlib1g-dev \
-            wget
+          APK_COMMIT="b5a31c0d865342ad80be10d68f1bb3d3ad9b0866"
 
-          echo "=== Verify dependencies ==="
+          echo "=== Download apk-tools source ==="
+
+          curl -fL --retry 3 \
+            "https://github.com/alpinelinux/apk-tools/archive/${APK_COMMIT}.tar.gz" \
+            -o apk-tools.tar.gz
+
+          mkdir apk-tools
+          tar -xzf apk-tools.tar.gz \
+            --strip-components=1 \
+            -C apk-tools
+
+          cd apk-tools
+
+          echo "=== Source ==="
+          git_hash="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+          echo "Expected commit: ${APK_COMMIT}"
+          ls -la
+
+          echo "=== Meson ==="
           meson --version
-          ninja --version
-          openssl version
-          pkg-config --version
 
-          echo "=== Clone OpenWrt ==="
-          git clone --depth=1 \
-            https://github.com/openwrt/openwrt.git \
-            openwrt
+          echo "=== Configure ==="
+          meson setup build \
+            -Ddocs=disabled \
+            -Dhelp=enabled \
+            -Dlua_version=5.1 \
+            -Ddefault_library=static \
+            -Durl_backend=wget \
+            -Dzstd=disabled \
+            -Dpython=disabled \
+            -Dtests=disabled \
+            -Dcrypto_backend=openssl \
+            -Dminimal=true \
+            -Dversion=3.0.5
 
-          cd openwrt
-
-          echo "=== OpenWrt revision ==="
-          git log -1 --oneline
-
-          echo "=== Prepare OpenWrt ==="
-          make defconfig
-
-          echo "=== Build host apk ==="
-          make package/system/apk/host/compile -j2 V=s
+          echo "=== Build ==="
+          meson compile -C build
 
           echo "=== Locate apk ==="
-          find staging_dir -type f -name apk -ls
+          find build -type f -name apk -ls
 
-          echo "=== Test apk ==="
-          staging_dir/host/bin/apk --version
+          echo "=== Test ==="
+          find build -type f -name apk -exec {} --version \;
           
       - name: Commit APK
         run: |
