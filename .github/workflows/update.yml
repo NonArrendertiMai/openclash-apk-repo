@@ -16,9 +16,13 @@ jobs:
 
       - name: Install apk-tools
         run: |
-          wget https://downloads.openwrt.org/snapshots/packages/x86_64/base/apk-tools-static_3.0.5-r1_x86_64.apk
+          wget -qO- https://downloads.openwrt.org/snapshots/packages/x86_64/base/Packages.adb.tar.gz > /tmp/packages.tar.gz
+          tar -xf /tmp/packages.tar.gz -C /tmp
+          APK=$(grep -a -o 'apk-tools-static_[^"]*x86_64.apk' /tmp/packages.adb | head -1)
+
+          wget https://downloads.openwrt.org/snapshots/packages/x86_64/base/$APK
           mkdir apk-tools
-          tar -xf apk-tools-static*.apk -C apk-tools
+          tar -xf $APK -C apk-tools
           sudo cp apk-tools/usr/bin/apk /usr/local/bin/
           apk --version
 
